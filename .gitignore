@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.pytest_cache/
+.ruff_cache/
+*.so
+.env
+.venv/
+venv/
+*.swp
+*.swo
+.DS_Store
+.intent-space/
+
+# CHP session artifacts (local only)
+.chp_registry.json
+.chp/sessions/
