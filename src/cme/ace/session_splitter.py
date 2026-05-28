@@ -122,7 +122,7 @@ class SessionSplitter:
         logger.info(
             "Session split: total=%d, train=%d, sel=%d, test=%d",
             summary["total"], summary["train"],
-            summary["sel"], summary["test"],
+            summary["selection"], summary["test"],
         )
 
         return result

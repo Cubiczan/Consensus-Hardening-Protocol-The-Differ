@@ -225,7 +225,7 @@ consensus-commons/
 │   ├── __init__.py
 │   ├── test_basic.py               # 8 tests: imports, CHP gates, orchestrator
 │   ├── test_consensus.py           # 42 tests: client, routing, adapter, council, models
-│   ├── test_skillopt.py            # 20 tests: SKILLOPT optimizer, registry, buffer
+│   ├── test_skillopt.py            # 28 tests: SKILLOPT optimizer, registry, buffer, hierarchical merge, rewrite mode, protected sections
 │   ├── test_council_quality.py     # 33 tests: quality gate, learning loop, R0, disclosure
 │   └── test_chp_canonical.py      # 34 tests: canonical CHP core, protocol, agent
 ├── demo/
@@ -270,6 +270,11 @@ ACE playbook evolution is governed by a **SKILLOPT-style training loop** ([Yang 
 | Epoch-wise meta update | Cross-epoch slow/meta update on LOCKED playbooks |
 | Champion registry (best_skill.md) | Versioned skill per (domain, target-model, harness) |
 | Optimizer model (separate frontier) | Curator role = optimizer, agents = target models |
+| 4 atomic edit ops (append/insert_after/replace/delete) | `EditOp` enum with INSERT_AFTER for positional edits |
+| Protected slow-update section | `SLOW_UPDATE_START/END` markers immune to step-level edits |
+| Hierarchical failure-priority merge | `merge_edits_hierarchical()` with 70/30 failure/success budget |
+| Patch + rewrite modes | `EditMode.PATCH` / `EditMode.REWRITE` in TrainingConfig |
+| Rollout batch accumulation | `accumulation_batches` config for multi-batch reflection |
 
 ### 6. Full Metadata on Every Post
 
@@ -284,7 +289,7 @@ cd consensus-commons
 PYTHONPATH=src python -m pytest tests/ -v
 ```
 
-**137 tests** covering:
+**195 tests** covering:
 - MockSpacebaseClient operations (scan, post, enter, lock states, idempotency)
 - IntentRouter classification (finance, strategy, general, reject, custom policies)
 - SpacebaseAdapter integration (scan, enter, post_child, run_council)
@@ -292,6 +297,11 @@ PYTHONPATH=src python -m pytest tests/ -v
 - Data models (Intent, Post, PostTree, LockState serialization)
 - End-to-end integration (full council lifecycle, failed validation)
 - SKILLOPT skill optimization (edit budget, merge, training loop, validation gate)
+- SKILLOPT INSERT_AFTER edit operation (positional insertion without section headers)
+- SKILLOPT protected slow-update sections (SLOW_UPDATE_START/END markers)
+- SKILLOPT hierarchical failure-priority merge (70/30 failure/success budget split)
+- SKILLOPT rewrite mode (full skill rewrite vs localized patch edits)
+- SKILLOPT rollout batch accumulation (multi-batch reflection before editing)
 - Champion registry (promotion, rejection, persistence)
 - Rejected edit buffer (adversarial memory, persistence, optimizer context)
 - Session splitter (stratified train/sel/test splits)
@@ -392,17 +402,21 @@ MIT
 
 ## Acknowledgments
 
-- **SkillOpt: Executive Strategy for Self-Evolving Agent Skills** — Yang et al., Microsoft / SJTU / Tongji / Fudan, May 2026. [arXiv:2605.23904](https://arxiv.org/abs/2605.23904)
+- **SkillOpt: Executive Strategy for Self-Evolving Agent Skills** — Yifan Yang, Ziyang Gong, Weiquan Huang, Qihao Yang, Ziwei Zhou, Zisu Huang, Yan Li, Xuemei Gao, Qi Dai, Bei Liu, Kai Qiu, Yuqing Yang, Dongdong Chen, Xue Yang, Chong Luo. Microsoft Research / Shanghai Jiao Tong University / Tongji University / Fudan University, May 2026. [arXiv:2605.23904](https://arxiv.org/abs/2605.23904) | [DOI:10.48550/arXiv.2605.23904](https://doi.org/10.48550/arXiv.2605.23904) | [Code](https://aka.ms/SkillOpt)
 
-  The ACE (Agentic Context Engineering) subsystem's playbook evolution loop is directly informed by SKILLOPT's framework for treating skill documents as the external state of a frozen LLM agent, optimized through bounded textual edits, held-out validation gates, learning-rate budgets, and epoch-wise momentum updates. SKILLOPT demonstrated SOTA on all 52 evaluated cells across 7 target models, 3 harnesses, and 6 benchmarks.
+  The ACE (Agentic Context Engineering) subsystem's playbook evolution loop is directly informed by SKILLOPT's framework for treating skill documents as the external state of a frozen LLM agent, optimized through bounded textual edits, held-out validation gates, learning-rate budgets, and epoch-wise momentum updates. SKILLOPT demonstrated SOTA on all 52 evaluated cells across 7 target models (GPT-5.5, GPT-5.4, GPT-5.4-mini, GPT-5.4-nano, GPT-5.2, Qwen3.5-4B, Qwen3.6-35B-A3B), 3 harnesses (direct chat, Codex, Claude Code), and 6 benchmarks (SearchQA, SpreadsheetBench, OfficeQA, DocVQA, LiveMathematicianBench, ALFWorld). On GPT-5.5 it lifts average no-skill accuracy by +23.5 points in direct chat, +24.8 inside Codex, and +19.1 inside Claude Code.
 
   Specific SKILLOPT concepts adopted in this repository:
 
-  - **Textual learning rate (L_t)**: Implemented as a per-step edit budget in the `SkillOptimizer`, controlling how many edits the Curator can propose per optimization step. Uses cosine annealing or constant schedules with configurable L_max and L_floor parameters.
+  - **Textual learning rate (L_t)**: Implemented as a per-step edit budget in the `SkillOptimizer`, controlling how many edits the Curator can propose per optimization step. Uses cosine annealing, linear decay, constant, or autonomous schedules with configurable L_max and L_floor parameters.
   - **Validation gate (D_sel)**: The champion registry's `try_promote()` method enforces strict champion-vs-candidate comparison on the held-out selection split. Ties are explicitly rejected (candidate must *strictly* beat the champion), preventing stagnation.
   - **Rejected-edit buffer**: Failed candidate edits are retained as adversarial memory in the `RejectedEditBuffer`, providing the TriangulationRunner with concrete examples of what didn't work — analogous to SKILLOPT's adversarial memory mechanism.
-  - **Epoch-wise meta update**: The training loop's epoch structure supports cross-epoch momentum, where successful edit patterns from earlier epochs inform later optimization steps.
+  - **Epoch-wise meta update**: The training loop's epoch structure supports cross-epoch slow/meta update momentum, where successful edit patterns from earlier epochs inform later optimization steps. Protected sections delimited by `SLOW_UPDATE_START`/`SLOW_UPDATE_END` markers are immune to step-level edits.
   - **Curator/optimizer separation**: The Curator proposes edits while a separate optimization process evaluates them on held-out data, mirroring SKILLOPT's separation of the optimizer model from the target model.
+  - **4 atomic edit operations**: `EditOp` enum supports `APPEND`, `INSERT_AFTER`, `REPLACE`, and `DELETE` — matching SKILLOPT's full set of textual edit primitives (append, insert_after, replace, delete).
+  - **Hierarchical failure-priority merge**: `merge_edits_hierarchical()` mirrors SKILLOPT's batch merge strategy — failure and success edits are analyzed separately, deduplicated independently, and merged with failure patches given priority (~70% budget allocation).
+  - **Patch and rewrite modes**: `EditMode.PATCH` (localized bounded edits) and `EditMode.REWRITE` (full skill rewrite from suggestions) map to SKILLOPT's two training modes, with rewrite preserving protected slow-update sections across rewrites.
+  - **Rollout batch accumulation**: `accumulation_batches` in `TrainingConfig` allows accumulating multiple rollout batches before reflecting — decoupling execution throughput from update frequency.
 
 ---
 

@@ -47,6 +47,13 @@ class LearningRateSchedule(str, Enum):
     AUTONOMOUS = "autonomous"
 
 
+class EditMode(str, Enum):
+    """SkillOpt §3.4 — patch mode (localized edits) vs rewrite mode (full rewrite)."""
+
+    PATCH = "patch"
+    REWRITE = "rewrite"
+
+
 @dataclass
 class OptimizationStep:
     """Record of a single SKILLOPT optimization step."""
@@ -99,6 +106,10 @@ class TrainingConfig:
     max_epochs: int = 4  # SKILLOPT default: 4
     rollout_batch_size: int = 40
     reflection_minibatch_size: int = 8
+    accumulation_batches: int = 1  # §3.2: rollout batches to accumulate before reflecting
+
+    # Edit mode (§3.4)
+    edit_mode: EditMode = EditMode.PATCH
 
     # Validation gate
     strict_validation: bool = True  # Reject ties (SKILLOPT default)
@@ -274,6 +285,136 @@ class SkillOptimizer:
         )
         return clipped
 
+    def merge_edits_hierarchical(
+        self,
+        failure_edits: list[SkillEdit],
+        success_edits: list[SkillEdit],
+        budget: int,
+    ) -> list[SkillEdit]:
+        """Hierarchical failure-priority merge (§3.3).
+
+        Analyzes failure and success edits separately, deduplicates each
+        group, removes success edits that conflict with failure edits (same
+        target), then allocates ~70% of budget to failure edits and ~30% to
+        success edits (failure takes priority).
+
+        Args:
+            failure_edits: Edits derived from failure-case analysis.
+            success_edits: Edits derived from success-case reinforcement.
+            budget: Total edit budget L_t.
+
+        Returns:
+            Combined list of SkillEdit clipped to budget.
+        """
+        # Deduplicate failure edits by target (keep highest utility)
+        failure_seen: dict[str, SkillEdit] = {}
+        for edit in failure_edits:
+            if edit.target not in failure_seen or edit.utility_score > failure_seen[edit.target].utility_score:
+                failure_seen[edit.target] = edit
+        deduped_failures = list(failure_seen.values())
+
+        # Deduplicate success edits by target (keep highest utility)
+        success_seen: dict[str, SkillEdit] = {}
+        for edit in success_edits:
+            if edit.target not in success_seen or edit.utility_score > success_seen[edit.target].utility_score:
+                success_seen[edit.target] = edit
+
+        # Remove success edits that conflict with failure edits (same target)
+        filtered_successes = [
+            edit for edit in success_seen.values()
+            if edit.target not in failure_seen
+        ]
+
+        # Rank each group by utility (descending)
+        deduped_failures.sort(key=lambda e: e.utility_score, reverse=True)
+        filtered_successes.sort(key=lambda e: e.utility_score, reverse=True)
+
+        # Allocate ~70% budget to failures, ~30% to successes
+        failure_budget = max(1, int(budget * 0.7))
+        success_budget = max(1, budget - failure_budget)
+
+        selected_failures = deduped_failures[:failure_budget]
+        selected_successes = filtered_successes[:success_budget]
+
+        merged = selected_failures + selected_successes
+        logger.info(
+            "Hierarchical merge: %d failures → %d, %d successes → %d, "
+            "budget=%d (failure=%d, success=%d), final=%d",
+            len(failure_edits), len(selected_failures),
+            len(success_edits), len(selected_successes),
+            budget, failure_budget, success_budget, len(merged),
+        )
+        return merged
+
+    def rewrite_skill(
+        self,
+        skill: SkillDocument,
+        suggestions: str,
+    ) -> SkillDocument:
+        """Rewrite mode (§3.4): generate a complete new skill from suggestions.
+
+        Instead of applying localized patches, the optimizer model generates
+        a full replacement of the skill document based on the accumulated
+        suggestions text. The protected slow-update section (§3.6) is
+        preserved across rewrites.
+
+        Args:
+            skill: Current skill document to rewrite.
+            suggestions: Accumulated improvement suggestions from reflection.
+
+        Returns:
+            New SkillDocument with rewritten content.
+        """
+        # Preserve the protected section if present
+        protected = ""
+        if skill.has_protected_section():
+            protected = skill.get_protected_section()
+
+        # In production, this calls the optimizer model (frontier LLM)
+        # to generate a full skill rewrite. For now, prepend the suggestions
+        # as a new section and keep existing content as a base.
+        new_sections = [
+            f"# {skill.domain.capitalize()} Skill v{skill.version + 1}",
+            "",
+            "## Improvement Notes",
+            suggestions,
+            "",
+            "## Procedures",
+        ]
+
+        # Extract existing procedure content (everything after ## Procedures)
+        lines = skill.content.split("\n")
+        proc_idx = -1
+        for i, line in enumerate(lines):
+            if "## Procedures" in line:
+                proc_idx = i
+                break
+        if proc_idx >= 0:
+            new_sections.extend(lines[proc_idx + 1:])
+        else:
+            new_sections.extend(lines)
+
+        new_content = "\n".join(new_sections)
+
+        # Re-attach the protected section at the end
+        if protected:
+            new_content += f"\n\n{SkillDocument.SLOW_UPDATE_START}\n{protected}\n{SkillDocument.SLOW_UPDATE_END}\n"
+
+        new_skill = SkillDocument(
+            skill_id=uuid_hex(),
+            domain=skill.domain,
+            target_model=skill.target_model,
+            harness=skill.harness,
+            version=skill.version + 1,
+            content=new_content,
+            epoch=skill.epoch,
+        )
+        logger.info(
+            "Rewrite mode: generated new skill v%d from %d chars of suggestions",
+            new_skill.version, len(suggestions),
+        )
+        return new_skill
+
     def validate_candidate(
         self,
         candidate: SkillDocument,
@@ -371,6 +512,7 @@ class SkillOptimizer:
             rejections=0,
             final_champion_score=0.0,
             initial_champion_score=0.0,
+            improvement=0.0,
         )
 
         # Split data
@@ -385,7 +527,9 @@ class SkillOptimizer:
         if champion:
             report.initial_champion_score = champion.validation_score
 
-        total_steps = self.config.max_epochs * max(1, split.train_size // self.config.rollout_batch_size)
+        total_steps = self.config.max_epochs * max(
+            1, split.train_size // self.config.rollout_batch_size
+        )
         prev_skill = SkillDocument(
             skill_id=skill.skill_id,
             domain=skill.domain,
@@ -399,9 +543,11 @@ class SkillOptimizer:
         for epoch in range(self.config.max_epochs):
             logger.info("=== Epoch %d/%d ===", epoch + 1, self.config.max_epochs)
 
-            # Rollout batch on D_train
+            # Rollout batch on D_train with accumulation support (§3.2)
             batch_start = 0
             step_in_epoch = 0
+            accum_batches: list[SessionOutcome] = []
+            suggestions = ""
 
             while batch_start < split.train_size:
                 batch = split.train[
@@ -409,6 +555,14 @@ class SkillOptimizer:
                 ]
                 if not batch:
                     break
+
+                # Accumulate batches before reflecting (§3.2)
+                accum_batches.extend(batch)
+                batch_start += self.config.rollout_batch_size
+
+                if len(accum_batches) < self.config.accumulation_batches * self.config.rollout_batch_size:
+                    # Not enough accumulated yet
+                    continue
 
                 step_start = time.time()
                 self._step_counter += 1
@@ -425,22 +579,31 @@ class SkillOptimizer:
                     break
 
                 # Propose edits (forward pass: rollout + reflection)
-                proposed = self.propose_edits(current, batch, skill.domain)
+                proposed = self.propose_edits(current, accum_batches, skill.domain)
 
                 # Merge and clip to budget (bounded update)
                 applied = self.merge_edits(proposed, budget)
 
-                # Apply edits to create candidate
-                candidate_content = current.apply_edits(applied)
-                candidate = SkillDocument(
-                    skill_id=uuid_hex(),
-                    domain=skill.domain,
-                    target_model=skill.target_model,
-                    harness=skill.harness,
-                    version=current.version + 1,
-                    content=candidate_content,
-                    epoch=epoch,
-                )
+                if (
+                    self.config.edit_mode == EditMode.REWRITE
+                    and proposed
+                    and suggestions
+                ):
+                    # Rewrite mode (§3.4): full skill rewrite from suggestions
+                    candidate = self.rewrite_skill(current, suggestions)
+                    applied = []  # No individual edits to track in rewrite
+                else:
+                    # Patch mode (default): apply localized edits
+                    candidate_content = current.apply_edits(applied)
+                    candidate = SkillDocument(
+                        skill_id=uuid_hex(),
+                        domain=skill.domain,
+                        target_model=skill.target_model,
+                        harness=skill.harness,
+                        version=current.version + 1,
+                        content=candidate_content,
+                        epoch=epoch,
+                    )
 
                 # Validation gate on D_sel
                 candidate_score = self.validate_candidate(candidate, split)
@@ -492,7 +655,13 @@ class SkillOptimizer:
                 report.steps.append(step_record)
                 report.total_steps += 1
 
-                batch_start += self.config.rollout_batch_size
+                # Collect suggestions for potential rewrite mode
+                for edit in proposed:
+                    if edit.rationale:
+                        suggestions += f"- [{edit.target}] {edit.rationale}\n"
+
+                # Reset accumulation
+                accum_batches = []
 
             # Epoch-wise meta update (momentum)
             current = self.registry.get_champion(skill.registry_key)

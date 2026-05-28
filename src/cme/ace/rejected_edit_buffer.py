@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from cme.ace.models import SkillDocument, SkillEdit
+from cme.ace.models import EditOp, SkillDocument, SkillEdit
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +162,7 @@ class RejectedEditBuffer:
         ]
         for i, r in enumerate(rejections, 1):
             lines.append(
-                f"{i}. [{r.edit.op.value}] '{r.edit.target}' "
+                f"{i}. [{r.edit.op.value.upper()}] '{r.edit.target}' "
                 f"(score gap: {r.candidate_score:.3f} vs {r.champion_score:.3f}) "
                 f"— {r.rejection_reason}"
             )
@@ -191,7 +191,7 @@ class RejectedEditBuffer:
                     data = json.loads(line)
                     edit_data = data.pop("edit", {})
                     edit = SkillEdit(
-                        op=edit_data.get("op", "append"),
+                        op=EditOp(edit_data.get("op", "append")),
                         target=edit_data.get("target", ""),
                         content=edit_data.get("content", ""),
                         rationale=edit_data.get("rationale", ""),

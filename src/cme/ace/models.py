@@ -16,9 +16,17 @@ from typing import Any
 
 
 class EditOp(str, Enum):
-    """Types of textual edits the Curator can apply to a skill."""
+    """Types of textual edits the Curator can apply to a skill.
+
+    SkillOpt §3.3 defines 4 atomic edit operations:
+      - append: Add new content at the end of a section (creates header if missing)
+      - insert_after: Insert content after a specific target line (no new header)
+      - replace: Replace content within a section
+      - delete: Remove a section's content
+    """
 
     APPEND = "append"
+    INSERT_AFTER = "insert_after"
     DELETE = "delete"
     REPLACE = "replace"
 
@@ -58,7 +66,15 @@ class SkillDocument:
     Skills are versioned markdown files (~300-2000 tokens) containing
     procedures, heuristics, tool policies, and output rules. The SKILLOPT
     loop optimizes this document through bounded edits gated by validation.
+
+    Supports a protected slow-update section (§3.6) delimited by
+    SLOW_UPDATE_START / SLOW_UPDATE_END markers that shields meta-update
+    content from step-level edits.
     """
+
+    # Slow-update markers (§3.6): protect meta-update content from edits
+    SLOW_UPDATE_START = "<!-- SLOW_UPDATE_START -->"
+    SLOW_UPDATE_END = "<!-- SLOW_UPDATE_END -->"
 
     skill_id: str = ""
     domain: str = ""  # e.g. "finance", "critmin", "security"
@@ -78,14 +94,77 @@ class SkillDocument:
         """Unique key for the champion registry: (domain, target_model, harness)."""
         return f"{self.domain}/{self.target_model}/{self.harness}"
 
+    @staticmethod
+    def _find_protected_ranges(lines: list[str]) -> list[tuple[int, int]]:
+        """Return list of (start, end) inclusive ranges for protected sections."""
+        ranges: list[tuple[int, int]] = []
+        i = 0
+        while i < len(lines):
+            if SkillDocument.SLOW_UPDATE_START in lines[i]:
+                start = i
+                i += 1
+                while i < len(lines) and SkillDocument.SLOW_UPDATE_END not in lines[i]:
+                    i += 1
+                end = i if i < len(lines) else len(lines) - 1
+                ranges.append((start, end))
+            i += 1
+        return ranges
+
+    @staticmethod
+    def _is_protected(line_idx: int, ranges: list[tuple[int, int]]) -> bool:
+        """Check whether a line index falls inside any protected range."""
+        for start, end in ranges:
+            if start <= line_idx <= end:
+                return True
+        return False
+
+    def has_protected_section(self) -> bool:
+        """Check whether the content contains a slow-update protected section."""
+        return (self.SLOW_UPDATE_START in self.content
+                and self.SLOW_UPDATE_END in self.content)
+
+    def get_protected_section(self) -> str:
+        """Extract content between the slow-update markers.
+
+        Returns the inner content (excluding the markers themselves).
+        Returns empty string if no protected section exists.
+        """
+        try:
+            start_marker = self.content.index(self.SLOW_UPDATE_START)
+            end_marker = self.content.index(self.SLOW_UPDATE_END)
+            inner_start = start_marker + len(self.SLOW_UPDATE_START)
+            return self.content[inner_start:end_marker].strip("\n")
+        except ValueError:
+            return ""
+
+    def set_protected_section(self, content: str) -> str:
+        """Replace content between the slow-update markers.
+
+        Returns the new full document content. If no markers exist, returns
+        the content unchanged.
+        """
+        if not self.has_protected_section():
+            return self.content
+        start_marker = self.SLOW_UPDATE_START
+        end_marker = self.SLOW_UPDATE_END
+        new_content = f"{start_marker}\n{content}\n{end_marker}"
+        # Replace everything from start marker to end marker (inclusive)
+        idx_start = self.content.index(start_marker)
+        idx_end = self.content.index(end_marker) + len(end_marker)
+        return self.content[:idx_start] + new_content + self.content[idx_end:]
+
     def apply_edits(self, edits: list[SkillEdit]) -> str:
         """Apply a list of edits to this skill's content and return new content.
 
         This is the textual analog of a gradient step — bounded, structured,
-        and reversible.
+        and reversible. Edits targeting lines inside the protected slow-update
+        section (§3.6) are silently skipped.
         """
         lines = self.content.split("\n")
         new_lines = list(lines)
+
+        # Pre-compute protected ranges so edits cannot modify protected content
+        protected_ranges = self._find_protected_ranges(new_lines)
 
         for edit in edits:
             target_lower = edit.target.lower()
@@ -97,33 +176,50 @@ class SkillDocument:
                     target_idx = i
                     break
 
-            if target_idx == -1 and edit.op == EditOp.APPEND:
-                # Target not found — append at end as new section
-                new_lines.append("")
-                new_lines.append(f"## {edit.target}")
-                new_lines.append(edit.content)
-            elif target_idx != -1:
+            if target_idx == -1:
                 if edit.op == EditOp.APPEND:
-                    # Insert after the target line
+                    # Target not found — append at end as new section
+                    new_lines.append("")
+                    new_lines.append(f"## {edit.target}")
+                    new_lines.append(edit.content)
+            elif self._is_protected(target_idx, protected_ranges):
+                # Skip edits targeting the protected section (§3.6)
+                logger = __import__("logging").getLogger(__name__)
+                logger.debug(
+                    "Skipping edit on protected section: target=%s op=%s",
+                    edit.target, edit.op.value,
+                )
+                continue
+            else:
+                if edit.op == EditOp.APPEND:
+                    # Insert after the target line (creates new section if needed)
+                    insert_pos = target_idx + 1
+                    for content_line in edit.content.split("\n"):
+                        new_lines.insert(insert_pos, content_line)
+                        insert_pos += 1
+                elif edit.op == EditOp.INSERT_AFTER:
+                    # Insert content after the target line without creating a header
                     insert_pos = target_idx + 1
                     for content_line in edit.content.split("\n"):
                         new_lines.insert(insert_pos, content_line)
                         insert_pos += 1
                 elif edit.op == EditOp.DELETE:
-                    # Remove lines until next section header
+                    # Remove lines until next section header or protected marker
                     delete_start = target_idx
                     delete_end = target_idx + 1
                     while delete_end < len(new_lines):
-                        if new_lines[delete_end].startswith("#"):
+                        line = new_lines[delete_end]
+                        if line.startswith("#") or self._is_protected(delete_end, protected_ranges):
                             break
                         delete_end += 1
                     new_lines = new_lines[:delete_start] + new_lines[delete_end:]
                 elif edit.op == EditOp.REPLACE:
-                    # Replace content between target and next section
+                    # Replace content between target and next section or protected marker
                     replace_start = target_idx + 1
                     replace_end = replace_start
                     while replace_end < len(new_lines):
-                        if new_lines[replace_end].startswith("#"):
+                        line = new_lines[replace_end]
+                        if line.startswith("#") or self._is_protected(replace_end, protected_ranges):
                             break
                         replace_end += 1
                     replacement = [edit.content] if isinstance(edit.content, str) else edit.content.split("\n")
