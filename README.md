@@ -184,14 +184,29 @@ Each child post carries full Consensus Commons metadata:
 consensus-commons/
 ├── src/
 │   └── cme/
-│       ├── __init__.py              # Package init
+│       ├── __init__.py              # Package init (v0.3.0)
 │       ├── cli.py                   # CLI: cme spacebase-demo, cme scan, cme info
 │       ├── orchestrator.py          # TurnResult, Workflow — mesh engine integration
-│       ├── chp.py                   # CHP lock states + SKILLOPT validation gate
+│       ├── chp_locks.py             # CHP lock states + SKILLOPT validation gate mapping
+│       ├── agent.py                 # MeshAgent base class with protocol integration
+│       ├── protocol.py              # Cognitive Mesh Protocol — expansion/compression reasoning
+│       ├── context.py               # ContextEngine — in-memory organizational knowledge store
 │       ├── r0_gate.py               # R0 first-gate evaluation (Solvable/Scoped/Valid/Worth It)
 │       ├── council_quality_gate.py  # 7-dimension council quality evaluation
 │       ├── council_learning.py      # Self-improving learning loop for councils
 │       ├── foundation_disclosure.py # Weakest assumption disclosure module
+│       ├── chp/                     # Canonical CHP core primitives
+│       │   ├── __init__.py          # Package exports
+│       │   ├── models.py            # DecisionCase, Dossier, FoundationDisclosure, etc.
+│       │   ├── gates.py             # R0 gate + phase gate evaluation
+│       │   ├── payloads.py          # Payload envelope integrity (build/validate/extract)
+│       │   ├── orchestrator.py      # CHPOrchestrator — full session lifecycle
+│       │   ├── registry.py          # DecisionRegistry with JSON persistence
+│       │   ├── validators.py        # Third-party validation for lock progression
+│       │   ├── rounds.py            # Round progression (FOUNDATION → SPEC → IMPLEMENTATION)
+│       │   ├── foundation.py        # Foundation verdicts + disclosure/attack validation
+│       │   ├── devil.py             # Devil's advocate helpers
+│       │   └── parity.py            # Model parity assessment with tier inference
 │       ├── ace/                     # Agentic Context Engineering — SKILLOPT loop
 │       │   ├── __init__.py          # ACE v0.2.0
 │       │   ├── models.py            # SkillDocument, SkillEdit, SessionOutcome
@@ -208,9 +223,11 @@ consensus-commons/
 │           └── council.py           # CouncilRunner — multi-agent orchestration
 ├── tests/
 │   ├── __init__.py
+│   ├── test_basic.py               # 8 tests: imports, CHP gates, orchestrator
 │   ├── test_consensus.py           # 42 tests: client, routing, adapter, council, models
 │   ├── test_skillopt.py            # 20 tests: SKILLOPT optimizer, registry, buffer
-│   └── test_council_quality.py     # 33 tests: quality gate, learning loop, R0, disclosure
+│   ├── test_council_quality.py     # 33 tests: quality gate, learning loop, R0, disclosure
+│   └── test_chp_canonical.py      # 34 tests: canonical CHP core, protocol, agent
 ├── demo/
 │   └── output.md                   # Captured demo output
 ├── pyproject.toml                   # Package config, deps, CLI entry point
@@ -267,7 +284,7 @@ cd consensus-commons
 PYTHONPATH=src python -m pytest tests/ -v
 ```
 
-**95 tests** covering:
+**137 tests** covering:
 - MockSpacebaseClient operations (scan, post, enter, lock states, idempotency)
 - IntentRouter classification (finance, strategy, general, reject, custom policies)
 - SpacebaseAdapter integration (scan, enter, post_child, run_council)
@@ -283,6 +300,9 @@ PYTHONPATH=src python -m pytest tests/ -v
 - Council Learning Loop (propose, approve, reject, apply lifecycle)
 - R0 Gate (solvable, scoped, valid, worth-it first-gate checks)
 - Foundation Disclosure (weakest assumptions, invalidation conditions, key vulnerabilities)
+- Canonical CHP core (DecisionCase, Dossier, gates, payloads, registry, validators, orchestrator)
+- Cognitive Mesh Protocol (expansion/compression reasoning, grounding checks, hallucination detection)
+- MeshAgent base class (domain specialization, protocol integration)
 
 ---
 

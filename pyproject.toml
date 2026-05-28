@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "consensus-commons"
-version = "0.1.0"
+version = "0.3.0"
 description = "A Spacebase1 adapter that turns public intents into visible multi-agent decision rooms with consensus hardening."
 readme = "README.md"
 license = {text = "MIT"}

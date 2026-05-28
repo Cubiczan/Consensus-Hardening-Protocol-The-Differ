@@ -14,7 +14,7 @@ from cme.ace.skill_optimizer import (
     TrainingConfig,
     TrainingReport,
 )
-from cme.chp import SKILLOPTLockState, SKILLOPT_TRANSITIONS
+from cme.chp_locks import SKILLOPTLockState, SKILLOPT_TRANSITIONS
 
 
 def _make_session(
