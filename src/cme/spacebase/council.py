@@ -28,6 +28,9 @@ from typing import TYPE_CHECKING, Any
 from cme.spacebase.models import LockState, Post
 
 if TYPE_CHECKING:
+    from cme.council_quality_gate import CouncilQualityGateResult
+    from cme.council_learning import CouncilLearningCandidate
+    from cme.foundation_disclosure import FoundationDisclosureResult
     from cme.spacebase.adapter import SpacebaseAdapter
     from cme.spacebase.routing import RouteDecision
     from cme.spacebase.models import Intent
@@ -201,6 +204,9 @@ class CouncilReport:
 
     Contains all posts created during the deliberation, the final lock state,
     timing information, and references to the root intent and trace.
+
+    Extended in v0.3.0 with quality gate results, foundation disclosure,
+    and learning candidates from the self-improving loop.
     """
 
     root_intent_id: str
@@ -210,6 +216,10 @@ class CouncilReport:
     final_state: LockState = LockState.PROVISIONAL
     duration: float = 0.0
     agent_contributions: dict[str, list[str]] = field(default_factory=dict)
+    # Extended fields (v0.3.0) — populated by Phase 5/6
+    quality_gate: CouncilQualityGateResult | None = None
+    learning_candidates: list[CouncilLearningCandidate] = field(default_factory=list)
+    foundation_disclosure: FoundationDisclosureResult | None = None
 
     def to_markdown(self) -> str:
         """Render the council report as markdown for the demo script."""
@@ -401,5 +411,32 @@ class CouncilRunner:
         # Lock the room
         locked = await adapter.client.lock_intent(intent.intent_id, LockState.LOCKED)
         report.final_state = LockState.LOCKED if locked else LockState.VALIDATED
+
+        # Phase 5: Quality Gate evaluation
+        try:
+            from cme.council_quality_gate import CouncilQualityGate
+            from cme.foundation_disclosure import FoundationDisclosure
+            from cme.council_learning import CouncilLearningLoop
+
+            quality_gate = CouncilQualityGate()
+            report.quality_gate = quality_gate.evaluate(report)
+
+            # Foundation disclosure
+            disclosure = FoundationDisclosure()
+            report.foundation_disclosure = disclosure.generate_disclosure(report)
+
+            # Phase 6: Learning candidate proposal
+            learning_loop = CouncilLearningLoop()
+            if report.quality_gate:
+                report.learning_candidates = learning_loop.propose_learning(
+                    report.quality_gate, report
+                )
+                if report.learning_candidates:
+                    logger.info(
+                        "Proposed %d learning candidates from quality gate evaluation",
+                        len(report.learning_candidates),
+                    )
+        except Exception as exc:
+            logger.warning("Quality gate / learning loop failed: %s", exc)
 
         return report

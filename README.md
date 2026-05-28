@@ -22,38 +22,48 @@ Consensus Commons is a thin adapter that turns Spacebase1's public intent spaces
 
 > "A public adversarial decision council where agents open nested spaces, challenge each other, and lock conclusions only after visible review."
 
-Every decision flows through a four-phase lifecycle:
+Every decision flows through a six-phase lifecycle:
 
-1. **ANALYSIS** — domain expert agents produce independent assessments
-2. **CHALLENGE** — an adversarial agent raises counter-arguments (room state: CHALLENGED)
-3. **VALIDATION** — a compliance or general validator checks CHP gates
-4. **LOCK** — if validated, the room locks with a full audit trail (room state: LOCKED)
+1. **R0 GATE** — intent is checked for Solvability, Scope, Validity, and Worth before entering the council
+2. **ANALYSIS** — domain expert agents produce independent assessments
+3. **CHALLENGE** — an adversarial agent raises counter-arguments (room state: CHALLENGED)
+4. **VALIDATION** — a compliance or general validator checks CHP gates
+5. **LOCK** — if validated, the room locks with a full audit trail (room state: LOCKED)
+6. **QUALITY GATE + LEARNING** — the council output is evaluated through 7 quality dimensions, a foundation disclosure is generated, and learning candidates are proposed for the next cycle
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Consensus Commons                            │
-│                                                                  │
-│  ┌──────────┐    ┌──────────────┐    ┌──────────────────┐      │
-│  │  CLI     │───>│  Adapter     │───>│  Spacebase Client│      │
-│  │  cme     │    │  adapter.py  │    │  client.py       │      │
-│  └──────────┘    └──────┬───────┘    └────────┬─────────┘      │
-│                         │                      │                │
-│                 ┌───────┴────────┐    ┌────────┴──────────┐    │
-│                 │                │    │                   │    │
-│          ┌──────▼──────┐  ┌─────▼──────┐   ┌────────────▼─┐ │
-│          │   Router    │  │  Council   │   │  Mock / HTTP  │ │
-│          │ routing.py  │  │ council.py │   │  Client       │ │
-│          └──────┬──────┘  └─────┬──────┘   └──────────────┘ │
-│                 │               │                            │
-│          ┌──────▼───────────────▼──────────────────────┐     │
-│          │         Spacebase1 ITP Protocol             │     │
-│          │   POST intent / SCAN space / ENTER interior  │     │
-│          └─────────────────────────────────────────────┘     │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│                        Consensus Commons                               │
+│                                                                          │
+│  ┌──────────┐    ┌──────────────┐    ┌──────────────────┐            │
+│  │  CLI     │───>│  Adapter     │───>│  Spacebase Client│            │
+│  │  cme     │    │  adapter.py  │    │  client.py       │            │
+│  └──────────┘    └──────┬───────┘    └────────┬─────────┘            │
+│                         │                      │                      │
+│                 ┌───────┴────────┐    ┌────────┴──────────┐          │
+│                 │                │    │                   │          │
+│          ┌──────▼──────┐  ┌─────▼──────┐   ┌────────────▼─┐       │
+│          │   Router    │  │  Council   │   │  Mock / HTTP  │       │
+│          │ routing.py  │  │ council.py │   │  Client       │       │
+│          └──────┬──────┘  └─────┬──────┘   └──────────────┘       │
+│                 │               │                                    │
+│          ┌──────▼──────┐  ┌────▼───────────┐                        │
+│          │   R0 Gate   │  │ Quality Gate   │                        │
+│          │  r0_gate.py │  │ council_qual.. │                        │
+│          └─────────────┘  └────┬───────────┘                        │
+│                               │                                     │
+│          ┌──────────────┬──────┴──────┐                             │
+│          │              │              │                             │
+│   ┌──────▼────────┐  ┌─▼──────────┐  ┌▼────────────────┐          │
+│   │ Foundation     │  │  Learning  │  │ Spacebase1 ITP  │          │
+│   │ Disclosure      │  │  Loop      │  │ Protocol        │          │
+│   │ foundation_..py │  │ council_.. │  │                  │          │
+│   └────────────────┘  └────────────┘  └─────────────────┘          │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Architecture Mapping
@@ -178,6 +188,10 @@ consensus-commons/
 │       ├── cli.py                   # CLI: cme spacebase-demo, cme scan, cme info
 │       ├── orchestrator.py          # TurnResult, Workflow — mesh engine integration
 │       ├── chp.py                   # CHP lock states + SKILLOPT validation gate
+│       ├── r0_gate.py               # R0 first-gate evaluation (Solvable/Scoped/Valid/Worth It)
+│       ├── council_quality_gate.py  # 7-dimension council quality evaluation
+│       ├── council_learning.py      # Self-improving learning loop for councils
+│       ├── foundation_disclosure.py # Weakest assumption disclosure module
 │       ├── ace/                     # Agentic Context Engineering — SKILLOPT loop
 │       │   ├── __init__.py          # ACE v0.2.0
 │       │   ├── models.py            # SkillDocument, SkillEdit, SessionOutcome
@@ -195,7 +209,8 @@ consensus-commons/
 ├── tests/
 │   ├── __init__.py
 │   ├── test_consensus.py           # 42 tests: client, routing, adapter, council, models
-│   └── test_skillopt.py            # 20 tests: SKILLOPT optimizer, registry, buffer
+│   ├── test_skillopt.py            # 20 tests: SKILLOPT optimizer, registry, buffer
+│   └── test_council_quality.py     # 33 tests: quality gate, learning loop, R0, disclosure
 ├── demo/
 │   └── output.md                   # Captured demo output
 ├── pyproject.toml                   # Package config, deps, CLI entry point
@@ -252,7 +267,7 @@ cd consensus-commons
 PYTHONPATH=src python -m pytest tests/ -v
 ```
 
-**62 tests** covering:
+**95 tests** covering:
 - MockSpacebaseClient operations (scan, post, enter, lock states, idempotency)
 - IntentRouter classification (finance, strategy, general, reject, custom policies)
 - SpacebaseAdapter integration (scan, enter, post_child, run_council)
@@ -264,6 +279,64 @@ PYTHONPATH=src python -m pytest tests/ -v
 - Rejected edit buffer (adversarial memory, persistence, optimizer context)
 - Session splitter (stratified train/sel/test splits)
 - SKILLOPT lock state transitions (EXPLORING through LOCKED path)
+- Council Quality Gate (7 dimensions: source grounding, finance logic, materiality, continuity, open issues, learning candidates, human approval)
+- Council Learning Loop (propose, approve, reject, apply lifecycle)
+- R0 Gate (solvable, scoped, valid, worth-it first-gate checks)
+- Foundation Disclosure (weakest assumptions, invalidation conditions, key vulnerabilities)
+
+---
+
+## R0 Gate
+
+The R0 Gate is the first gate every decision intent must pass **before** entering the council pipeline. It prevents waste of computational resources by filtering out unanswerable, overly broad, malformed, or trivial questions.
+
+| Check | What It Evaluates | Failure Example |
+|---|---|---|
+| **Solvable** | Can agents meaningfully answer this? | "What is the meaning of life?" |
+| **Scoped** | Is the scope specific enough? | "How should we restructure everything?" |
+| **Valid** | Are inputs well-formed? | Contradictory language in intent |
+| **Worth It** | Worth multi-agent compute? | Single-word queries, trivial yes/no |
+
+Implementation: `src/cme/r0_gate.py` — fully rule-based, zero LLM dependency.
+
+## Council Quality Gate
+
+After a council run completes (Phase 5), the CouncilQualityGate evaluates the output through **7 independent quality dimensions**:
+
+| Dimension | What It Measures | Key Signals |
+|---|---|---|
+| **Source Grounding** | Are claims backed by evidence? | Evidence keywords, body lengths, metadata |
+| **Finance Logic** | Does reasoning hold up? | Financial keywords, quantitative data |
+| **Materiality** | Focus on what matters | Post count, agent diversity, conclusion state |
+| **Continuity** | Prior decisions consistent? | Trace ID consistency, lock progression |
+| **Open Issues** | Assumptions vs. facts? | Assumption language, adversarial presence |
+| **Learning Candidates** | Improvement signals? | Improvement-oriented language, conditions |
+| **Human Approval** | Items needing sign-off? | Human review keywords, auto-lock flags |
+
+Each dimension produces a 0.0–1.0 score. Critical and warning failures block overall pass. Implementation: `src/cme/council_quality_gate.py`.
+
+## Foundation Disclosure
+
+Every council run produces a **foundation disclosure** — an explicit statement of the weakest assumptions underlying the consensus:
+
+- **1–3 Weakest Assumptions** — assumptions most likely to break the conclusion
+- **1–2 Invalidation Conditions** — conditions that would invalidate the consensus
+- **1 Key Vulnerability** — the most significant deliberation process risk
+
+The disclosure analyses agreement levels (high agreement = possible groupthink), challenge severity, evidence gaps, and missing agent perspectives. Implementation: `src/cme/foundation_disclosure.py`.
+
+## Council Learning Loop
+
+The CouncilLearningLoop implements a **closed-loop self-improvement cycle** for multi-agent deliberations. Every council run produces learning candidates that flow through a well-defined lifecycle:
+
+```
+PENDING_REVIEW ──> APPROVED ──> APPLIED to Next Cycle
+       │
+       └──> REJECTED
+       └──> NEEDS_REWRITE
+```
+
+Learning candidates are generated from quality gate failures and low-scoring dimensions. The `get_cycle_improvement_report()` method produces a markdown summary of improvement trends across recent cycles. Implementation: `src/cme/council_learning.py`.
 
 ---
 
@@ -302,6 +375,14 @@ MIT
 - **SkillOpt: Executive Strategy for Self-Evolving Agent Skills** — Yang et al., Microsoft / SJTU / Tongji / Fudan, May 2026. [arXiv:2605.23904](https://arxiv.org/abs/2605.23904)
 
   The ACE (Agentic Context Engineering) subsystem's playbook evolution loop is directly informed by SKILLOPT's framework for treating skill documents as the external state of a frozen LLM agent, optimized through bounded textual edits, held-out validation gates, learning-rate budgets, and epoch-wise momentum updates. SKILLOPT demonstrated SOTA on all 52 evaluated cells across 7 target models, 3 harnesses, and 6 benchmarks.
+
+  Specific SKILLOPT concepts adopted in this repository:
+
+  - **Textual learning rate (L_t)**: Implemented as a per-step edit budget in the `SkillOptimizer`, controlling how many edits the Curator can propose per optimization step. Uses cosine annealing or constant schedules with configurable L_max and L_floor parameters.
+  - **Validation gate (D_sel)**: The champion registry's `try_promote()` method enforces strict champion-vs-candidate comparison on the held-out selection split. Ties are explicitly rejected (candidate must *strictly* beat the champion), preventing stagnation.
+  - **Rejected-edit buffer**: Failed candidate edits are retained as adversarial memory in the `RejectedEditBuffer`, providing the TriangulationRunner with concrete examples of what didn't work — analogous to SKILLOPT's adversarial memory mechanism.
+  - **Epoch-wise meta update**: The training loop's epoch structure supports cross-epoch momentum, where successful edit patterns from earlier epochs inform later optimization steps.
+  - **Curator/optimizer separation**: The Curator proposes edits while a separate optimization process evaluates them on held-out data, mirroring SKILLOPT's separation of the optimizer model from the target model.
 
 ---
 
