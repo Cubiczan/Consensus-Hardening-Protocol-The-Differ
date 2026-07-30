@@ -7,6 +7,40 @@ on:
     branches: [main, master]
 
 jobs:
+  chp-conformance:
+    # Gates on actual protocol behaviour, not file presence. No `|| true` here:
+    # a divergence must fail the build.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Golden vectors are in sync with the reference
+        run: |
+          python3 spec/conformance/generate_vectors.py
+          if ! git diff --quiet -- spec/golden-vectors/; then
+            echo "::error::golden-vectors/ is stale — run spec/conformance/generate_vectors.py and commit the result"
+            git diff -- spec/golden-vectors/
+            exit 1
+          fi
+
+      - name: Reference implementation is conformant
+        run: python3 spec/conformance/run_conformance.py --adapter reference
+
+      - name: Conformance suite still detects known divergences
+        run: |
+          # The fixture reproduces real divergences from shipped ports and MUST
+          # fail. If it passes, the suite has stopped catching regressions.
+          if python3 spec/conformance/run_conformance.py \
+               --adapter-cmd "python3 spec/conformance/adapters/legacy_divergence_adapter.py" \
+               --quiet > /dev/null 2>&1; then
+            echo "::error::legacy divergence fixture PASSED — the conformance suite no longer detects known bugs"
+            exit 1
+          fi
+          echo "fixture correctly rejected"
+
   chp-gate:
     runs-on: ubuntu-latest
     steps:

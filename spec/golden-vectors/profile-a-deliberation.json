@@ -1,0 +1,334 @@
+{
+  "spec": "CHP v1.0 §5",
+  "r0_gate": [
+    {
+      "name": "all-pass",
+      "input": {
+        "solvable": true,
+        "scoped": true,
+        "valid": true,
+        "worth_it": true
+      },
+      "expected": {
+        "results": {
+          "Solvable": "PASS",
+          "Scoped": "PASS",
+          "Valid": "PASS",
+          "Worth_it": "PASS"
+        },
+        "verdict": "PASS"
+      }
+    },
+    {
+      "name": "unscoped-halts",
+      "input": {
+        "solvable": true,
+        "scoped": false,
+        "valid": true,
+        "worth_it": true
+      },
+      "expected": {
+        "results": {
+          "Solvable": "PASS",
+          "Scoped": "FATAL",
+          "Valid": "PASS",
+          "Worth_it": "PASS"
+        },
+        "verdict": "HALT"
+      }
+    },
+    {
+      "name": "not-worth-it-halts",
+      "input": {
+        "solvable": true,
+        "scoped": true,
+        "valid": true,
+        "worth_it": false
+      },
+      "expected": {
+        "results": {
+          "Solvable": "PASS",
+          "Scoped": "PASS",
+          "Valid": "PASS",
+          "Worth_it": "FATAL"
+        },
+        "verdict": "HALT"
+      }
+    },
+    {
+      "name": "all-fail",
+      "input": {
+        "solvable": false,
+        "scoped": false,
+        "valid": false,
+        "worth_it": false
+      },
+      "expected": {
+        "results": {
+          "Solvable": "FATAL",
+          "Scoped": "FATAL",
+          "Valid": "FATAL",
+          "Worth_it": "FATAL"
+        },
+        "verdict": "HALT"
+      }
+    }
+  ],
+  "foundation_floors": [
+    {
+      "domain": "general",
+      "floor": 70
+    },
+    {
+      "domain": "ai",
+      "floor": 70
+    },
+    {
+      "domain": "blockchain",
+      "floor": 85
+    },
+    {
+      "domain": "defi",
+      "floor": 85
+    },
+    {
+      "domain": "finance",
+      "floor": 100
+    },
+    {
+      "domain": "cfo",
+      "floor": 100
+    },
+    {
+      "domain": "capital_allocation",
+      "floor": 100
+    },
+    {
+      "domain": "totally-unknown",
+      "floor": 70
+    },
+    {
+      "domain": "",
+      "floor": 70
+    }
+  ],
+  "foundation_verdict": [
+    {
+      "name": "general-70-passes",
+      "score": 70,
+      "domain": "general",
+      "expected": "PASS"
+    },
+    {
+      "name": "general-69-reframes",
+      "score": 69,
+      "domain": "general",
+      "expected": "REFRAME"
+    },
+    {
+      "name": "blockchain-84-reframes",
+      "score": 84,
+      "domain": "blockchain",
+      "expected": "REFRAME"
+    },
+    {
+      "name": "blockchain-85-passes",
+      "score": 85,
+      "domain": "blockchain",
+      "expected": "PASS"
+    },
+    {
+      "name": "finance-99-reframes",
+      "score": 99,
+      "domain": "finance",
+      "expected": "REFRAME"
+    },
+    {
+      "name": "finance-100-passes",
+      "score": 100,
+      "domain": "finance",
+      "expected": "PASS"
+    },
+    {
+      "name": "finance-70-reframes-regression",
+      "score": 70,
+      "domain": "finance",
+      "expected": "REFRAME"
+    }
+  ],
+  "phase_gate": [
+    {
+      "name": "early-round-always-passes",
+      "round": 1,
+      "state": "EXPLORING",
+      "expected": "PASS"
+    },
+    {
+      "name": "round-3-unlocked-fails",
+      "round": 3,
+      "state": "EXPLORING",
+      "expected": "PHASE_GATE_FAIL"
+    },
+    {
+      "name": "round-3-provisional-lock-passes",
+      "round": 3,
+      "state": "PROVISIONAL_LOCK",
+      "expected": "PASS"
+    },
+    {
+      "name": "round-3-locked-passes",
+      "round": 3,
+      "state": "LOCKED",
+      "expected": "PASS"
+    }
+  ],
+  "round_progression": [
+    {
+      "name": "foundation-to-spec",
+      "phase": 0,
+      "round": 0,
+      "expected": {
+        "phase": 1,
+        "round": 1
+      }
+    },
+    {
+      "name": "spec-round-1-iterates",
+      "phase": 1,
+      "round": 1,
+      "expected": {
+        "phase": 1,
+        "round": 2
+      }
+    },
+    {
+      "name": "spec-round-2-to-implementation",
+      "phase": 1,
+      "round": 2,
+      "expected": {
+        "phase": 2,
+        "round": 3
+      }
+    },
+    {
+      "name": "implementation-iterates",
+      "phase": 2,
+      "round": 3,
+      "expected": {
+        "phase": 2,
+        "round": 4
+      }
+    }
+  ],
+  "model_parity": [
+    {
+      "name": "identical-tier",
+      "origin": "claude-opus-4",
+      "partner": "claude-opus-4",
+      "expected": {
+        "origin": "claude-opus-4",
+        "partner": "claude-opus-4",
+        "delta": "NONE",
+        "advisory": null
+      }
+    },
+    {
+      "name": "adjacent-tier",
+      "origin": "claude-sonnet-4",
+      "partner": "gpt-5",
+      "expected": {
+        "origin": "claude-sonnet-4",
+        "partner": "gpt-5",
+        "delta": "MINOR",
+        "advisory": "Slight analytical weight difference. Monitor for dominance bias."
+      }
+    },
+    {
+      "name": "significant-gap",
+      "origin": "claude-opus-4",
+      "partner": "claude-haiku-4-5",
+      "expected": {
+        "origin": "claude-opus-4",
+        "partner": "claude-haiku-4-5",
+        "delta": "SIGNIFICANT",
+        "advisory": "Adversary materially weaker than proposer; challenge is not credible."
+      }
+    },
+    {
+      "name": "unknown-partner",
+      "origin": "claude-opus-4",
+      "partner": "some-local-llm",
+      "expected": {
+        "origin": "claude-opus-4",
+        "partner": "some-local-llm",
+        "delta": "MINOR",
+        "advisory": "One or both model tiers are unknown. Treat parity as advisory only."
+      }
+    }
+  ],
+  "accuracy_guard": [
+    {
+      "name": "clean-finance-lock",
+      "foundation_score": 100,
+      "domain": "finance",
+      "state": "LOCKED",
+      "structural_vulnerabilities": [],
+      "blind_spots": [],
+      "expected": {
+        "passes": true,
+        "reason": "",
+        "required_action": null
+      }
+    },
+    {
+      "name": "finance-below-floor",
+      "foundation_score": 85,
+      "domain": "finance",
+      "state": "PROVISIONAL",
+      "structural_vulnerabilities": [],
+      "blind_spots": [],
+      "expected": {
+        "passes": false,
+        "reason": "foundation score 85 below floor 100",
+        "required_action": "REQUIRES_HUMAN_VERIFICATION"
+      }
+    },
+    {
+      "name": "locked-with-open-vulnerability",
+      "foundation_score": 100,
+      "domain": "finance",
+      "state": "LOCKED",
+      "structural_vulnerabilities": [
+        "oracle can be stale"
+      ],
+      "blind_spots": [],
+      "expected": {
+        "passes": false,
+        "reason": "1 structural vulnerability(ies) remain open",
+        "required_action": "REQUIRES_HUMAN_VERIFICATION"
+      }
+    },
+    {
+      "name": "general-clean",
+      "foundation_score": 70,
+      "domain": "general",
+      "state": "PROVISIONAL",
+      "structural_vulnerabilities": [],
+      "blind_spots": [],
+      "expected": {
+        "passes": true,
+        "reason": "",
+        "required_action": null
+      }
+    }
+  ],
+  "payload_envelope": {
+    "route": "RX",
+    "payload_id": "AB12CD",
+    "rendered": "BEGIN_PAYLOAD [RX] [AB12CD]\nCORE_PROBLEM: example\nEND_PAYLOAD [RX] [AB12CD]",
+    "valid": true,
+    "tampered_footer_valid": false,
+    "echo_confirmed": true,
+    "echo_wrong_id": false
+  }
+}

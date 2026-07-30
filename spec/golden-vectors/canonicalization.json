@@ -1,0 +1,65 @@
+{
+  "spec": "CHP v1.0 §3.1–3.2",
+  "note": "key-order-independence-a and -b MUST produce identical canonical form and hash. This is the property that makes cross-language verification possible.",
+  "vectors": [
+    {
+      "name": "key-order-independence-a",
+      "input": {
+        "b": 1,
+        "a": 2
+      },
+      "canonical": "{\"a\":2,\"b\":1}",
+      "sha256": "d3626ac30a87e6f7a6428233b3c68299976865fa5508e4267c5415c76af7a772"
+    },
+    {
+      "name": "key-order-independence-b",
+      "input": {
+        "a": 2,
+        "b": 1
+      },
+      "canonical": "{\"a\":2,\"b\":1}",
+      "sha256": "d3626ac30a87e6f7a6428233b3c68299976865fa5508e4267c5415c76af7a772"
+    },
+    {
+      "name": "nested-sorting",
+      "input": {
+        "z": {
+          "y": 1,
+          "x": [
+            3,
+            2,
+            1
+          ]
+        },
+        "a": null
+      },
+      "canonical": "{\"a\":null,\"z\":{\"x\":[3,2,1],\"y\":1}}",
+      "sha256": "7962721eeed151f8d41d9669829c7cabe65d18fad40893750a198f291b66a78a"
+    },
+    {
+      "name": "unicode-preserved",
+      "input": {
+        "note": "café ✓",
+        "n": 1
+      },
+      "canonical": "{\"n\":1,\"note\":\"café ✓\"}",
+      "sha256": "900a70a59e0d753dce68733ee66b2928b9af57cb3a92eec9e63374402da407ca"
+    },
+    {
+      "name": "float-and-bool",
+      "input": {
+        "f": 0.55,
+        "t": true,
+        "n": null
+      },
+      "canonical": "{\"f\":0.55,\"n\":null,\"t\":true}",
+      "sha256": "17136b7bf3e74864fdea400590cce82c8b590ec242ce3e6e4791eb5cb74ff374"
+    },
+    {
+      "name": "empty-object",
+      "input": {},
+      "canonical": "{}",
+      "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    }
+  ]
+}

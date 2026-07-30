@@ -1,0 +1,751 @@
+{
+  "spec": "CHP v1.0 §6",
+  "policy": {
+    "version": "test-1",
+    "max_notional": 500.0,
+    "daily_cap": 2500.0,
+    "hitl_threshold": 250.0,
+    "min_confidence": 0.55,
+    "allowed_actions": [
+      "LONG",
+      "SHORT"
+    ],
+    "per_asset_limits": {
+      "CAKE": 100.0
+    }
+  },
+  "notes": [
+    "HITL threshold is inclusive (>=): notional == threshold requires a human.",
+    "Hard-rule violations outrank the HITL test: an over-cap action is BLOCKED, never sent for approval.",
+    "committed_delta is what the caller adds to the daily total; BLOCKED and HITL_REQUIRED contribute 0.",
+    "Daily window is the UTC calendar day, not a rolling window from process start."
+  ],
+  "evaluate": [
+    {
+      "name": "clean-auto-lock",
+      "action": {
+        "action": "LONG",
+        "asset": "ETH",
+        "notional": 100.0,
+        "confidence": 0.8
+      },
+      "committed_today": 0.0,
+      "expected": {
+        "state": "LOCKED",
+        "allowed": true,
+        "requires_human": false,
+        "reason": "auto-approved under CHP thresholds",
+        "claims": [
+          {
+            "rule": "sane-notional",
+            "passed": true,
+            "detail": "notional=100.0"
+          },
+          {
+            "rule": "allowed-action",
+            "passed": true,
+            "detail": "action LONG"
+          },
+          {
+            "rule": "per-asset-cap",
+            "passed": true,
+            "detail": "ETH notional 100.0 vs cap 500.0"
+          },
+          {
+            "rule": "max-notional",
+            "passed": true,
+            "detail": "100.0 vs max 500.0"
+          },
+          {
+            "rule": "daily-cap",
+            "passed": true,
+            "detail": "projected 100.0 vs daily cap 2500.0"
+          },
+          {
+            "rule": "min-confidence",
+            "passed": true,
+            "detail": "confidence 0.8 vs min 0.55"
+          }
+        ],
+        "content_hash": "4610642fe2682d765c2716a874692b842e00ab9489735d12a135dc1d426633b8",
+        "committed_delta": 100.0
+      }
+    },
+    {
+      "name": "at-hitl-threshold-requires-human",
+      "action": {
+        "action": "LONG",
+        "asset": "ETH",
+        "notional": 250.0,
+        "confidence": 0.9
+      },
+      "committed_today": 0.0,
+      "expected": {
+        "state": "HITL_REQUIRED",
+        "allowed": false,
+        "requires_human": true,
+        "reason": "human approval required: 250.0 >= HITL threshold 250.0",
+        "claims": [
+          {
+            "rule": "sane-notional",
+            "passed": true,
+            "detail": "notional=250.0"
+          },
+          {
+            "rule": "allowed-action",
+            "passed": true,
+            "detail": "action LONG"
+          },
+          {
+            "rule": "per-asset-cap",
+            "passed": true,
+            "detail": "ETH notional 250.0 vs cap 500.0"
+          },
+          {
+            "rule": "max-notional",
+            "passed": true,
+            "detail": "250.0 vs max 500.0"
+          },
+          {
+            "rule": "daily-cap",
+            "passed": true,
+            "detail": "projected 250.0 vs daily cap 2500.0"
+          },
+          {
+            "rule": "min-confidence",
+            "passed": true,
+            "detail": "confidence 0.9 vs min 0.55"
+          }
+        ],
+        "content_hash": "77748976a5c0b2ce91f974299ff009858534209dae0ca2ee3cdc8750e3bbb2c9",
+        "committed_delta": 0.0
+      }
+    },
+    {
+      "name": "just-below-threshold-locks",
+      "action": {
+        "action": "LONG",
+        "asset": "ETH",
+        "notional": 249.99,
+        "confidence": 0.9
+      },
+      "committed_today": 0.0,
+      "expected": {
+        "state": "LOCKED",
+        "allowed": true,
+        "requires_human": false,
+        "reason": "auto-approved under CHP thresholds",
+        "claims": [
+          {
+            "rule": "sane-notional",
+            "passed": true,
+            "detail": "notional=249.99"
+          },
+          {
+            "rule": "allowed-action",
+            "passed": true,
+            "detail": "action LONG"
+          },
+          {
+            "rule": "per-asset-cap",
+            "passed": true,
+            "detail": "ETH notional 249.99 vs cap 500.0"
+          },
+          {
+            "rule": "max-notional",
+            "passed": true,
+            "detail": "249.99 vs max 500.0"
+          },
+          {
+            "rule": "daily-cap",
+            "passed": true,
+            "detail": "projected 249.99 vs daily cap 2500.0"
+          },
+          {
+            "rule": "min-confidence",
+            "passed": true,
+            "detail": "confidence 0.9 vs min 0.55"
+          }
+        ],
+        "content_hash": "693c28abd90a0148c1497553dd8d7e372dc3707920abeab8ece7e1e1fdaef694",
+        "committed_delta": 249.99
+      }
+    },
+    {
+      "name": "over-max-notional-blocked",
+      "action": {
+        "action": "LONG",
+        "asset": "ETH",
+        "notional": 501.0,
+        "confidence": 0.9
+      },
+      "committed_today": 0.0,
+      "expected": {
+        "state": "BLOCKED",
+        "allowed": false,
+        "requires_human": false,
+        "reason": "blocked: per-asset-cap, max-notional",
+        "claims": [
+          {
+            "rule": "sane-notional",
+            "passed": true,
+            "detail": "notional=501.0"
+          },
+          {
+            "rule": "allowed-action",
+            "passed": true,
+            "detail": "action LONG"
+          },
+          {
+            "rule": "per-asset-cap",
+            "passed": false,
+            "detail": "ETH notional 501.0 vs cap 500.0"
+          },
+          {
+            "rule": "max-notional",
+            "passed": false,
+            "detail": "501.0 vs max 500.0"
+          },
+          {
+            "rule": "daily-cap",
+            "passed": true,
+            "detail": "projected 501.0 vs daily cap 2500.0"
+          },
+          {
+            "rule": "min-confidence",
+            "passed": true,
+            "detail": "confidence 0.9 vs min 0.55"
+          }
+        ],
+        "content_hash": "9d41b833af4c77387a6a6eefa7dfcab2958a27dbc8d77bf1da034a12404b9019",
+        "committed_delta": 0.0
+      }
+    },
+    {
+      "name": "per-asset-cap-beats-global",
+      "action": {
+        "action": "LONG",
+        "asset": "CAKE",
+        "notional": 150.0,
+        "confidence": 0.9
+      },
+      "committed_today": 0.0,
+      "expected": {
+        "state": "BLOCKED",
+        "allowed": false,
+        "requires_human": false,
+        "reason": "blocked: per-asset-cap",
+        "claims": [
+          {
+            "rule": "sane-notional",
+            "passed": true,
+            "detail": "notional=150.0"
+          },
+          {
+            "rule": "allowed-action",
+            "passed": true,
+            "detail": "action LONG"
+          },
+          {
+            "rule": "per-asset-cap",
+            "passed": false,
+            "detail": "CAKE notional 150.0 vs cap 100.0"
+          },
+          {
+            "rule": "max-notional",
+            "passed": true,
+            "detail": "150.0 vs max 500.0"
+          },
+          {
+            "rule": "daily-cap",
+            "passed": true,
+            "detail": "projected 150.0 vs daily cap 2500.0"
+          },
+          {
+            "rule": "min-confidence",
+            "passed": true,
+            "detail": "confidence 0.9 vs min 0.55"
+          }
+        ],
+        "content_hash": "fd385ca0c0107d115d64c5ed5da4956125676675938337fa88ed22e21704777b",
+        "committed_delta": 0.0
+      }
+    },
+    {
+      "name": "daily-cap-exhausted",
+      "action": {
+        "action": "LONG",
+        "asset": "ETH",
+        "notional": 100.0,
+        "confidence": 0.9
+      },
+      "committed_today": 2450.0,
+      "expected": {
+        "state": "BLOCKED",
+        "allowed": false,
+        "requires_human": false,
+        "reason": "blocked: daily-cap",
+        "claims": [
+          {
+            "rule": "sane-notional",
+            "passed": true,
+            "detail": "notional=100.0"
+          },
+          {
+            "rule": "allowed-action",
+            "passed": true,
+            "detail": "action LONG"
+          },
+          {
+            "rule": "per-asset-cap",
+            "passed": true,
+            "detail": "ETH notional 100.0 vs cap 500.0"
+          },
+          {
+            "rule": "max-notional",
+            "passed": true,
+            "detail": "100.0 vs max 500.0"
+          },
+          {
+            "rule": "daily-cap",
+            "passed": false,
+            "detail": "projected 2550.0 vs daily cap 2500.0"
+          },
+          {
+            "rule": "min-confidence",
+            "passed": true,
+            "detail": "confidence 0.9 vs min 0.55"
+          }
+        ],
+        "content_hash": "557bcda7b5faf76f89e01037e93fab00452634e2d6697e8f6e75b974ef394bd4",
+        "committed_delta": 0.0
+      }
+    },
+    {
+      "name": "low-confidence-blocked",
+      "action": {
+        "action": "LONG",
+        "asset": "ETH",
+        "notional": 100.0,
+        "confidence": 0.1
+      },
+      "committed_today": 0.0,
+      "expected": {
+        "state": "BLOCKED",
+        "allowed": false,
+        "requires_human": false,
+        "reason": "blocked: min-confidence",
+        "claims": [
+          {
+            "rule": "sane-notional",
+            "passed": true,
+            "detail": "notional=100.0"
+          },
+          {
+            "rule": "allowed-action",
+            "passed": true,
+            "detail": "action LONG"
+          },
+          {
+            "rule": "per-asset-cap",
+            "passed": true,
+            "detail": "ETH notional 100.0 vs cap 500.0"
+          },
+          {
+            "rule": "max-notional",
+            "passed": true,
+            "detail": "100.0 vs max 500.0"
+          },
+          {
+            "rule": "daily-cap",
+            "passed": true,
+            "detail": "projected 100.0 vs daily cap 2500.0"
+          },
+          {
+            "rule": "min-confidence",
+            "passed": false,
+            "detail": "confidence 0.1 vs min 0.55"
+          }
+        ],
+        "content_hash": "c475dac78901c5bdbee585d521414d4d264037513b01f8f080ec13c83c9069f1",
+        "committed_delta": 0.0
+      }
+    },
+    {
+      "name": "disallowed-action-blocked",
+      "action": {
+        "action": "HOLD",
+        "asset": "ETH",
+        "notional": 100.0,
+        "confidence": 0.9
+      },
+      "committed_today": 0.0,
+      "expected": {
+        "state": "BLOCKED",
+        "allowed": false,
+        "requires_human": false,
+        "reason": "blocked: allowed-action",
+        "claims": [
+          {
+            "rule": "sane-notional",
+            "passed": true,
+            "detail": "notional=100.0"
+          },
+          {
+            "rule": "allowed-action",
+            "passed": false,
+            "detail": "action HOLD"
+          },
+          {
+            "rule": "per-asset-cap",
+            "passed": true,
+            "detail": "ETH notional 100.0 vs cap 500.0"
+          },
+          {
+            "rule": "max-notional",
+            "passed": true,
+            "detail": "100.0 vs max 500.0"
+          },
+          {
+            "rule": "daily-cap",
+            "passed": true,
+            "detail": "projected 100.0 vs daily cap 2500.0"
+          },
+          {
+            "rule": "min-confidence",
+            "passed": true,
+            "detail": "confidence 0.9 vs min 0.55"
+          }
+        ],
+        "content_hash": "c990d34065867d63675fa1a1697fbbae0ecb233da4c65b5c424e0b0bd177af5c",
+        "committed_delta": 0.0
+      }
+    },
+    {
+      "name": "zero-notional-blocked",
+      "action": {
+        "action": "LONG",
+        "asset": "ETH",
+        "notional": 0.0,
+        "confidence": 0.9
+      },
+      "committed_today": 0.0,
+      "expected": {
+        "state": "BLOCKED",
+        "allowed": false,
+        "requires_human": false,
+        "reason": "blocked: sane-notional",
+        "claims": [
+          {
+            "rule": "sane-notional",
+            "passed": false,
+            "detail": "notional=0.0"
+          },
+          {
+            "rule": "allowed-action",
+            "passed": true,
+            "detail": "action LONG"
+          },
+          {
+            "rule": "per-asset-cap",
+            "passed": true,
+            "detail": "ETH notional 0.0 vs cap 500.0"
+          },
+          {
+            "rule": "max-notional",
+            "passed": true,
+            "detail": "0.0 vs max 500.0"
+          },
+          {
+            "rule": "daily-cap",
+            "passed": true,
+            "detail": "projected 0.0 vs daily cap 2500.0"
+          },
+          {
+            "rule": "min-confidence",
+            "passed": true,
+            "detail": "confidence 0.9 vs min 0.55"
+          }
+        ],
+        "content_hash": "4ceb04cff7d1c04db6624eec6f9c47a99a7564ed07e97c15874892c59c29ccb0",
+        "committed_delta": 0.0
+      }
+    },
+    {
+      "name": "negative-notional-blocked",
+      "action": {
+        "action": "LONG",
+        "asset": "ETH",
+        "notional": -50.0,
+        "confidence": 0.9
+      },
+      "committed_today": 0.0,
+      "expected": {
+        "state": "BLOCKED",
+        "allowed": false,
+        "requires_human": false,
+        "reason": "blocked: sane-notional",
+        "claims": [
+          {
+            "rule": "sane-notional",
+            "passed": false,
+            "detail": "notional=-50.0"
+          },
+          {
+            "rule": "allowed-action",
+            "passed": true,
+            "detail": "action LONG"
+          },
+          {
+            "rule": "per-asset-cap",
+            "passed": true,
+            "detail": "ETH notional -50.0 vs cap 500.0"
+          },
+          {
+            "rule": "max-notional",
+            "passed": true,
+            "detail": "-50.0 vs max 500.0"
+          },
+          {
+            "rule": "daily-cap",
+            "passed": true,
+            "detail": "projected 0.0 vs daily cap 2500.0"
+          },
+          {
+            "rule": "min-confidence",
+            "passed": true,
+            "detail": "confidence 0.9 vs min 0.55"
+          }
+        ],
+        "content_hash": "05cc853147720034d0676007aada9814b2a7b3062c27dcbcab3a17229ae59ba8",
+        "committed_delta": 0.0
+      }
+    },
+    {
+      "name": "no-confidence-supplied-skips-check",
+      "action": {
+        "action": "LONG",
+        "asset": "ETH",
+        "notional": 100.0,
+        "confidence": null
+      },
+      "committed_today": 0.0,
+      "expected": {
+        "state": "LOCKED",
+        "allowed": true,
+        "requires_human": false,
+        "reason": "auto-approved under CHP thresholds",
+        "claims": [
+          {
+            "rule": "sane-notional",
+            "passed": true,
+            "detail": "notional=100.0"
+          },
+          {
+            "rule": "allowed-action",
+            "passed": true,
+            "detail": "action LONG"
+          },
+          {
+            "rule": "per-asset-cap",
+            "passed": true,
+            "detail": "ETH notional 100.0 vs cap 500.0"
+          },
+          {
+            "rule": "max-notional",
+            "passed": true,
+            "detail": "100.0 vs max 500.0"
+          },
+          {
+            "rule": "daily-cap",
+            "passed": true,
+            "detail": "projected 100.0 vs daily cap 2500.0"
+          }
+        ],
+        "content_hash": "6fb82bd7c57223274452ca9e038fde09047455cdd250725f882f92efe2a9c804",
+        "committed_delta": 100.0
+      }
+    }
+  ],
+  "approve_human": [
+    {
+      "name": "approve-hitl-action-locks",
+      "action": {
+        "action": "LONG",
+        "asset": "ETH",
+        "notional": 300.0,
+        "confidence": 0.9
+      },
+      "committed_today": 0.0,
+      "approver": "cfo@example.com",
+      "expected": {
+        "state": "LOCKED",
+        "allowed": true,
+        "requires_human": false,
+        "reason": "human-approved by cfo@example.com",
+        "claims": [
+          {
+            "rule": "human-approval",
+            "passed": true,
+            "detail": "approved by cfo@example.com"
+          }
+        ],
+        "content_hash": "822dec6c003ba5d3ff493363b0638b817537624625857797b02baa2f5067dc8c",
+        "committed_delta": 300.0
+      }
+    },
+    {
+      "name": "approval-cannot-bypass-max-notional",
+      "action": {
+        "action": "LONG",
+        "asset": "ETH",
+        "notional": 900.0,
+        "confidence": 0.9
+      },
+      "committed_today": 0.0,
+      "approver": "cfo@example.com",
+      "expected": {
+        "state": "BLOCKED",
+        "allowed": false,
+        "requires_human": false,
+        "reason": "approval by cfo@example.com rejected: blocked: per-asset-cap, max-notional",
+        "claims": [
+          {
+            "rule": "sane-notional",
+            "passed": true,
+            "detail": "notional=900.0"
+          },
+          {
+            "rule": "allowed-action",
+            "passed": true,
+            "detail": "action LONG"
+          },
+          {
+            "rule": "per-asset-cap",
+            "passed": false,
+            "detail": "ETH notional 900.0 vs cap 500.0"
+          },
+          {
+            "rule": "max-notional",
+            "passed": false,
+            "detail": "900.0 vs max 500.0"
+          },
+          {
+            "rule": "daily-cap",
+            "passed": true,
+            "detail": "projected 900.0 vs daily cap 2500.0"
+          },
+          {
+            "rule": "min-confidence",
+            "passed": true,
+            "detail": "confidence 0.9 vs min 0.55"
+          }
+        ],
+        "content_hash": "d8364053ecf2f8e3c05d8f39e9855840aab4a767d58a29e9f4f682a1db232ffa",
+        "committed_delta": 0.0
+      }
+    },
+    {
+      "name": "approval-cannot-bypass-low-confidence",
+      "action": {
+        "action": "LONG",
+        "asset": "ETH",
+        "notional": 300.0,
+        "confidence": 0.1
+      },
+      "committed_today": 0.0,
+      "approver": "cfo@example.com",
+      "expected": {
+        "state": "BLOCKED",
+        "allowed": false,
+        "requires_human": false,
+        "reason": "approval by cfo@example.com rejected: blocked: min-confidence",
+        "claims": [
+          {
+            "rule": "sane-notional",
+            "passed": true,
+            "detail": "notional=300.0"
+          },
+          {
+            "rule": "allowed-action",
+            "passed": true,
+            "detail": "action LONG"
+          },
+          {
+            "rule": "per-asset-cap",
+            "passed": true,
+            "detail": "ETH notional 300.0 vs cap 500.0"
+          },
+          {
+            "rule": "max-notional",
+            "passed": true,
+            "detail": "300.0 vs max 500.0"
+          },
+          {
+            "rule": "daily-cap",
+            "passed": true,
+            "detail": "projected 300.0 vs daily cap 2500.0"
+          },
+          {
+            "rule": "min-confidence",
+            "passed": false,
+            "detail": "confidence 0.1 vs min 0.55"
+          }
+        ],
+        "content_hash": "37aab0d83a29fe02eea5d50b3e478ddee10312a04c755ea257e385287f10aec5",
+        "committed_delta": 0.0
+      }
+    },
+    {
+      "name": "approval-cannot-bypass-daily-cap",
+      "action": {
+        "action": "LONG",
+        "asset": "ETH",
+        "notional": 300.0,
+        "confidence": 0.9
+      },
+      "committed_today": 2400.0,
+      "approver": "cfo@example.com",
+      "expected": {
+        "state": "BLOCKED",
+        "allowed": false,
+        "requires_human": false,
+        "reason": "approval by cfo@example.com rejected: blocked: daily-cap",
+        "claims": [
+          {
+            "rule": "sane-notional",
+            "passed": true,
+            "detail": "notional=300.0"
+          },
+          {
+            "rule": "allowed-action",
+            "passed": true,
+            "detail": "action LONG"
+          },
+          {
+            "rule": "per-asset-cap",
+            "passed": true,
+            "detail": "ETH notional 300.0 vs cap 500.0"
+          },
+          {
+            "rule": "max-notional",
+            "passed": true,
+            "detail": "300.0 vs max 500.0"
+          },
+          {
+            "rule": "daily-cap",
+            "passed": false,
+            "detail": "projected 2700.0 vs daily cap 2500.0"
+          },
+          {
+            "rule": "min-confidence",
+            "passed": true,
+            "detail": "confidence 0.9 vs min 0.55"
+          }
+        ],
+        "content_hash": "c7cfa7ca2fe5a64ddac6d64f3855d335c9f747fd2d092c816c9aceb1a30d2eae",
+        "committed_delta": 0.0
+      }
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "spec": "CHP v1.0 §3.3",
+  "note": "Removing or editing any entry MUST break every subsequent sig. Verifiers recompute the whole chain from prev_sig=''.",
+  "chain": [
+    {
+      "entry": {
+        "seq": 1,
+        "event": "decision.locked",
+        "decision_id": "d-001"
+      },
+      "prev_sig": "",
+      "sig": "9b45b4c2aa09ffc8bf507448b2db317711686aa6a51b99d1371e3e98220e97f7"
+    },
+    {
+      "entry": {
+        "seq": 2,
+        "event": "decision.locked",
+        "decision_id": "d-002"
+      },
+      "prev_sig": "9b45b4c2aa09ffc8bf507448b2db317711686aa6a51b99d1371e3e98220e97f7",
+      "sig": "93fe35fedc1e5bffa521da1b5d3de823a01df61a4ea6f329d97c78dab3a7aeee"
+    },
+    {
+      "entry": {
+        "seq": 3,
+        "event": "decision.blocked",
+        "decision_id": "d-003"
+      },
+      "prev_sig": "93fe35fedc1e5bffa521da1b5d3de823a01df61a4ea6f329d97c78dab3a7aeee",
+      "sig": "fcdede338da5ff5adaec95dccc37989c85f1448c8753617ce4b23a88272ab36a"
+    }
+  ],
+  "final_sig": "fcdede338da5ff5adaec95dccc37989c85f1448c8753617ce4b23a88272ab36a"
+}

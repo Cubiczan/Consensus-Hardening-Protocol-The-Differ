@@ -9,6 +9,27 @@
 
 > A public adversarial decision council where agents open nested spaces, challenge each other, and lock conclusions only after visible review — with **SKILLOPT-powered self-improving skill optimization**.
 
+---
+
+## 📐 CHP is specified here
+
+This repository holds the **normative specification** for the Consensus Hardening Protocol,
+which 30+ repositories across the portfolio depend on.
+
+| | |
+|---|---|
+| **[spec/CHP-v1.0.md](spec/CHP-v1.0.md)** | The specification. Start at §2 — "CHP" names *two* protocols. |
+| **[spec/DIVERGENCES.md](spec/DIVERGENCES.md)** | What the shipped ports get wrong, by severity. |
+| **[spec/conformance/](spec/conformance/)** | Reference implementation + conformance runner. |
+
+If you are implementing or porting CHP, test it:
+
+```bash
+python3 spec/conformance/run_conformance.py --adapter-cmd "your-adapter" --profile B
+```
+
+Any language works — the [adapter protocol](spec/CHP-v1.0.md#72-adapter-protocol) is one
+JSON object per line over stdio. Exit code is `0` only on full conformance.
 
 ---
 
