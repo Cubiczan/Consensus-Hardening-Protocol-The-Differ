@@ -48,6 +48,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install PyYAML
+        # The validation step below imports yaml; without this the job fails
+        # with ModuleNotFoundError before it checks anything.
+        run: pip install --quiet pyyaml
       - name: Validate CHP State Machine
         run: |
           python3 -c "
