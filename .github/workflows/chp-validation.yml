@@ -78,14 +78,14 @@ jobs:
           print('CHP_COMPLIANCE.md: PRESENT')
           print('All CHP artifacts validated successfully.')
           "
-      - name: Run Tests
-        run: |
-          if [ -f "pytest.ini" ] || [ -f "setup.py" ] || [ -f "pyproject.toml" ]; then
-            pip install -e ".[dev]" 2>/dev/null || pip install pytest 2>/dev/null
-            pytest tests/ -v --tb=short 2>/dev/null || echo "No tests found or tests skipped"
-          elif [ -f "package.json" ]; then
-            npm ci 2>/dev/null || npm install 2>/dev/null
-            npm test 2>/dev/null || echo "No npm tests configured"
-          else
-            echo "No test framework detected"
-          fi
+      # The test suite is deliberately NOT run here. This step used to be:
+      #
+      #   pytest tests/ ... 2>/dev/null || echo "No tests found or tests skipped"
+      #
+      # which reported success whatever happened — so 27 failing tests looked
+      # green in this workflow while the `test` job in ci.yml went red, and the
+      # two jobs installed different dependency sets. That divergence is what
+      # hid the missing pytest-asyncio for as long as it did.
+      #
+      # Tests now have exactly one owner: the `test` job in ci.yml, which runs on
+      # the same triggers. This job validates CHP artifacts only.

@@ -13,9 +13,18 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install dependencies
+        # Must be the [dev] extra, not a bare `pip install pytest`. The suite is
+        # mostly `async def` tests and pyproject sets asyncio_mode = "auto", so
+        # without pytest-asyncio every one of them errors with "async def
+        # functions are not natively supported" — 27 tests that never ran.
+        #
+        # No `2>/dev/null || true` here either: a dependency install that fails
+        # should fail the build, not silently degrade to a partial environment.
         run: |
           python -m pip install --upgrade pip
-          pip install -e . 2>/dev/null || pip install -r requirements.txt 2>/dev/null || true
-          pip install pytest
+          pip install -e ".[dev]"
+      - name: Verify async plugin is active
+        # Cheap guard so this specific regression can never come back quietly.
+        run: python -c "import pytest_asyncio; print('pytest-asyncio', pytest_asyncio.__version__)"
       - name: Run tests
         run: pytest tests/ -v --tb=short
